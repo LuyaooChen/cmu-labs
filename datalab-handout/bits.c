@@ -149,7 +149,6 @@ x&y提取两数均为为1的位，取反得两数不同或均为0的位；
 再将上述两个结果做与运算，得异或。
 */
   return ~(~x&~y)&~(x&y);
-
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -161,6 +160,7 @@ int tmin(void) {
 /*
 补码=原码取反+1
 最小的数的补码即：符号位1，后面全是0
+若int不是32位呢？
 */
   return 1<<31;
 
@@ -175,9 +175,15 @@ int tmin(void) {
  */
 int isTmax(int x) {
 /*
-最大值为0x7FFF
+最大值为符号位为0，后面全是1。32位的情况下就是0x7FFF FFFF;
+最大值有什么特征呢？就是+1会溢出（不考虑符号位）;然后导致符号位改变;
+以0x7F为例，x+1==0x80，与x正好每一位都不相同;
+因此想到异或：x^(x+1)==0xFF，全是1就好办了。
+由于需要返回1，再按位取反~得0x00，再取非!得1；
+若x==0xFF，加1得0x00，也会异或得0xFF,因此要排除x=0xFF的情况：即与上!!(x+1),保证x+1≠0
+本题主要是要考虑+1会溢出的情况，其他的任何数+1由于符号位不会改变，不会出现异或得0xFF的情况
 */
-  return 2;
+  return !(~(x^(x+1)))&!!(x+1);
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -188,7 +194,12 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+/*
+先或上0x55555555，使得偶数位全为1；若奇数也全为1，则为0xFFFFFFFF
+然后就和上题一样操作了按位取反~再逻辑非!
+仅允许使用0x00~0xff的数，因此这里可以通过移位得到
+*/
+  return !(~(x|0x55|0x55<<8|0x55<<16|0x55<<24));
 }
 /* 
  * negate - return -x 
@@ -198,7 +209,10 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+/*
+补码的定义，取反+1
+*/
+  return ~x+1;
 }
 //3
 /* 
@@ -211,7 +225,13 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+/*
+考虑和0比较可能会比较好做，x-0x30>=0 && x-0x39<=0
+大于小于0可以用符号位判断。
+减法用加法代替，参考上题。
+注意负数右移会高位补符号位1，所以要用!!转换一下
+*/
+  return !((x+~0x30+1)>>31)&!!((x+~0x3A+1)>>31);
 }
 /* 
  * conditional - same as x ? y : z 
@@ -221,7 +241,13 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  /*
+  判断x是否为0，0输出z，否则输出y;
+  要输出的数应该与上0xFF...,另一个数应与上0x00...，再进行或运算。
+  考虑到0xFF+1可得0x00，因此可用 0xFF+!x 来进行选择。
+  0xFF... 可由0按位取反得到。
+  */
+  return ((~0+!x)&y)|((~0+!!x)&z);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -231,7 +257,16 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+/*
+也是考虑和0比较：y-x>=0,用符号位判断，但发现有溢出的问题
+考虑到只有符号位不同时才可能溢出，就可以分为两种情况。也就是 | 的两边
+符号相同时就正常作差，然后判断符号位；
+符号不同则只看x或者y的符号就可以了，因为另一个已经判断了不同，x为负数则y为正，条件成立；
+这里只关注符号位，最后再右移&1即可。isDiffign起到选择的作用。
+*/
+  int diff = y+~x+1;
+  int isDiffSign = x^y;
+  return ((~diff & ~isDiffSign) | (isDiffSign&x))>>31&1;
 }
 //4
 /* 
@@ -243,7 +278,17 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+/*
+0的补码和原码是相同的，所以考虑用取反+1的操作。符号位都为0
+注意到最小整数0x8000 0000取反+1也是本身。但符号位都为1
+其他的数取反+1，符号位会不相同；所以可用符号位判断
+只关注符号位，最后把结果右移到第一位上；由于右移高位可能补1，所以还要&1；
+所以有真值表：   0 0 1
+                0 1 0
+                1 0 0
+                1 1 0
+*/
+  return ~(x|(~x+1))>>31&1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -258,7 +303,18 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+/*
+没明白这个题目的意思。。以下是别人的答案;
+大体思路就是使用二分法查找最高位的有效位，
+*/
+  int n = 0;
+  x ^= (x<<1);//??
+  n += ((!!(x&((~0)<<(n+16)))) << 4);
+  n += ((!!(x&((~0)<<(n+8)))) << 3);
+  n += ((!!(x&((~0)<<(n+4)))) << 2);
+  n += ((!!(x&((~0)<<(n+2)))) << 1);
+  n += (!!(x&((~0)<<(n+1))));
+  return n+1;//???
 }
 //float
 /* 
@@ -273,7 +329,23 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  unsigned exp=(uf&0x7F800000)>>23;
+  unsigned sign=uf&0x80000000;
+
+  if(exp==0xFF)//NaN or inf
+    return uf;
+
+  /*
+  非规范化数，左移1位乘2。
+  参考深入理解计算机系统（第三版）第二章，IEEE浮点表示的部分：
+  非规范化数和规范化数是平滑过渡的，这里左移1位不需要考虑尾数部分溢出了的问题，
+  事实证明移到阶码的位是刚刚好的。最后再把符号位补上。
+  */
+  if(exp==0) return (uf<<1)|sign;
+  
+  ++exp;//阶码+1==2的指数+1==乘2；
+  if(exp==0xFF) return 0x7F800000|sign; //超出表示范围，返回无穷大
+  return uf+0x00800000;//一般情况，把阶码加上
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -288,7 +360,23 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  int E=((uf&0x7F800000)>>23)-127; //指数=阶码-(2^(k-1)-1);E=e-bias;
+  unsigned sign=uf&0x80000000;
+  /*
+  提取尾数，并加上缺省的1。相当于得到一个1.xxx的小数左移了23位。
+  非规范数不需要+1，但(0,1)转int都为0就不用考虑了。
+  所以接下来需要把指数和23比较，大于23的要继续左移，小于23的要右移
+  */
+  unsigned frac=(uf&0x007FFFFF)|0x00800000;
+
+  if(E>30) return 0x80000000u;  //超出了int表示范围，这里包括了exp==0xFF即inf和NaN的情况；
+  if(E<0) return 0x0;           //(0,1)区间的数
+
+  if(E > 23) frac <<= (E-23);
+  else frac >>= (23-E);
+
+  if(sign>>31) return ~frac+1;  //负数需要取补码
+  else return frac;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -304,5 +392,11 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+/*
+E=e-bias;阶码的范围是0~0xFF
+*/
+  int exp=x+127;
+  if(exp<=0) return 0;
+  if(exp>=255) return 0x7F800000;
+  return exp<<23;
 }
